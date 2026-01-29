@@ -180,7 +180,16 @@ def main():
             # Get number of classes from dataset info
             from genomic_benchmarks.data_check import info
             import re
-            info_str = info(task_name)
+            import io
+            import sys
+            
+            # Capture printed output
+            old_stdout = sys.stdout
+            sys.stdout = buffer = io.StringIO()
+            info(task_name)
+            info_str = buffer.getvalue()
+            sys.stdout = old_stdout
+            
             # Parse "has N classes" from info string
             match = re.search(r'has (\d+) classes', info_str)
             n_classes = int(match.group(1)) if match else 2  # Default to binary
