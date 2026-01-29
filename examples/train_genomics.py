@@ -173,13 +173,17 @@ def main():
             base_train = DatasetClass(split='train', version=0)
             base_test = DatasetClass(split='test', version=0)
             
-            # Get sequence length and num classes from first sample
+            # Get sequence length from first sample
             sample_seq, _ = base_train[0]
             seq_len = len(sample_seq)
             
-            # Count classes
-            labels = [base_train[i][1] for i in range(min(1000, len(base_train)))]
-            n_classes = len(set(labels))
+            # Get number of classes from dataset info
+            from genomic_benchmarks.data_check import info
+            import re
+            info_str = info(task_name)
+            # Parse "has N classes" from info string
+            match = re.search(r'has (\d+) classes', info_str)
+            n_classes = int(match.group(1)) if match else 2  # Default to binary
             
             print(f"Train: {len(base_train)}, Test: {len(base_test)}")
             print(f"Sequence length: {seq_len}, Classes: {n_classes}")
