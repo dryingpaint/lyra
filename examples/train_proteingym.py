@@ -63,9 +63,9 @@ def download_proteingym(data_dir: Path):
     
     data_dir.mkdir(parents=True, exist_ok=True)
     
-    # ProteinGym substitution benchmark URL (from Zenodo)
-    url = "https://marks.hms.harvard.edu/proteingym/ProteinGym_substitutions.zip"
-    zip_path = data_dir / "ProteinGym_substitutions.zip"
+    # ProteinGym v1.3 substitution benchmark URL
+    url = "https://marks.hms.harvard.edu/proteingym/ProteinGym_v1.3/DMS_ProteinGym_substitutions.zip"
+    zip_path = data_dir / "DMS_ProteinGym_substitutions.zip"
     extract_dir = data_dir / "substitutions"
     
     if extract_dir.exists() and any(extract_dir.glob("*.csv")):
