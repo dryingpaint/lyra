@@ -333,6 +333,21 @@ def main():
                     substitutions_dir = subdir
                     break
     
+    # Handle nested directory structure from extraction
+    if not any(substitutions_dir.glob("*.csv")):
+        # Try looking for DMS_ProteinGym_substitutions subdirectory
+        dms_dir = substitutions_dir / "DMS_ProteinGym_substitutions"
+        if dms_dir.exists() and any(dms_dir.glob("*.csv")):
+            substitutions_dir = dms_dir
+        else:
+            # Check parent directory
+            for subdir in substitutions_dir.parent.iterdir():
+                if subdir.is_dir() and any(subdir.glob("*.csv")):
+                    substitutions_dir = subdir
+                    break
+    
+    print(f"Using data directory: {substitutions_dir}")
+    
     if args.all:
         # Run all assays
         csv_files = sorted(substitutions_dir.glob("*.csv"))
