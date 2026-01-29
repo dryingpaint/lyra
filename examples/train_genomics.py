@@ -100,21 +100,26 @@ def get_dataset_class(task_name):
     """Get the PyTorch dataset class for a task."""
     from genomic_benchmarks.dataset_getters import pytorch_datasets as ds
     
-    task_map = {
-        "human_enhancers_cohn": ds.HumanEnhancersCohn,
-        "human_enhancers_ensembl": ds.HumanEnhancersEnsembl,
-        "human_ensembl_regulatory": ds.HumanEnsemblRegulatory,
-        "human_nontata_promoters": ds.HumanNontataPromoters,
-        "human_ocr_ensembl": ds.HumanOcrEnsembl,
-        "drosophila_enhancers_stark": ds.DrosophilaEnhancersStark,
-        "demo_coding_vs_intergenomic_seqs": ds.DemoCodingVsIntergenomicSeqs,
-        "demo_human_or_worm": ds.DemoHumanOrWorm,
+    # Map task names to class names
+    class_name_map = {
+        "human_enhancers_cohn": "HumanEnhancersCohn",
+        "human_enhancers_ensembl": "HumanEnhancersEnsembl",
+        "human_ensembl_regulatory": "HumanEnsemblRegulatory",
+        "human_nontata_promoters": "HumanNontataPromoters",
+        "human_ocr_ensembl": "HumanOcrEnsembl",
+        "drosophila_enhancers_stark": "DrosophilaEnhancersStark",
+        "demo_coding_vs_intergenomic_seqs": "DemoCodingVsIntergenomicSeqs",
+        "demo_human_or_worm": "DemoHumanOrWorm",
     }
     
-    if task_name not in task_map:
-        raise ValueError(f"Unknown task: {task_name}. Available: {list(task_map.keys())}")
+    if task_name not in class_name_map:
+        raise ValueError(f"Unknown task: {task_name}. Available: {list(class_name_map.keys())}")
     
-    return task_map[task_name]
+    class_name = class_name_map[task_name]
+    if not hasattr(ds, class_name):
+        raise ValueError(f"Dataset class {class_name} not found in genomic_benchmarks")
+    
+    return getattr(ds, class_name)
 
 
 def main():
