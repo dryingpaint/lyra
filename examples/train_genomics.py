@@ -34,26 +34,28 @@ NUC_TO_IDX = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 4}
 
 
 class GenomicsDataset(Dataset):
-    """Dataset for DNA sequences."""
+    """Wrapper dataset that one-hot encodes DNA sequences."""
     
-    def __init__(self, sequences, labels, max_len=None):
-        self.sequences = sequences
-        self.labels = torch.tensor(labels, dtype=torch.long)
-        self.max_len = max_len or max(len(s) for s in sequences)
+    def __init__(self, base_dataset, max_len=None):
+        self.base_dataset = base_dataset
+        self.max_len = max_len
     
     def __len__(self):
-        return len(self.sequences)
+        return len(self.base_dataset)
     
     def __getitem__(self, idx):
-        seq = self.sequences[idx].upper()
+        seq, label = self.base_dataset[idx]
+        seq = seq.upper()
+        
+        max_len = self.max_len or len(seq)
         # One-hot encode (5 channels: A, C, G, T, N)
-        encoded = torch.zeros(self.max_len, 5)
-        for i, nuc in enumerate(seq[:self.max_len]):
+        encoded = torch.zeros(max_len, 5)
+        for i, nuc in enumerate(seq[:max_len]):
             if nuc in NUC_TO_IDX:
                 encoded[i, NUC_TO_IDX[nuc]] = 1.0
             else:
                 encoded[i, 4] = 1.0  # Unknown -> N
-        return encoded, self.labels[idx]
+        return encoded, label
 
 
 def train_epoch(model, dataloader, optimizer, criterion, device, scaler=None):
@@ -94,28 +96,25 @@ def evaluate(model, dataloader, device):
     return acc, mcc, f1
 
 
-def load_genomics_benchmark(task_name):
-    """Load a task from genomic-benchmarks."""
-    from genomic_benchmarks.loc2seq import download_dataset
-    from genomic_benchmarks.data_check import is_downloaded
+def get_dataset_class(task_name):
+    """Get the PyTorch dataset class for a task."""
+    from genomic_benchmarks.dataset_getters import pytorch_datasets as ds
     
-    # Download if needed
-    if not is_downloaded(task_name):
-        download_dataset(task_name)
+    task_map = {
+        "human_enhancers_cohn": ds.HumanEnhancersCohn,
+        "human_enhancers_ensembl": ds.HumanEnhancersEnsembl,
+        "human_ensembl_regulatory": ds.HumanEnsemblRegulatory,
+        "human_nontata_promoters": ds.HumanNontataPromoters,
+        "human_ocr_ensembl": ds.HumanOcrEnsembl,
+        "drosophila_enhancers_stark": ds.DrosophilaEnhancersStark,
+        "demo_coding_vs_intergenomic_seqs": ds.DemoCodingVsIntergenomicSeqs,
+        "demo_human_or_worm": ds.DemoHumanOrWorm,
+    }
     
-    # Load train/test
-    from genomic_benchmarks.loc2seq.with_splits import get_train_test_data
-    train_seqs, train_labels, test_seqs, test_labels = get_train_test_data(task_name)
+    if task_name not in task_map:
+        raise ValueError(f"Unknown task: {task_name}. Available: {list(task_map.keys())}")
     
-    # Convert to lists
-    train_seqs = [str(s) for s in train_seqs]
-    test_seqs = [str(s) for s in test_seqs]
-    train_labels = list(train_labels)
-    test_labels = list(test_labels)
-    
-    n_classes = len(set(train_labels))
-    
-    return train_seqs, train_labels, test_seqs, test_labels, n_classes
+    return task_map[task_name]
 
 
 def main():
@@ -162,16 +161,27 @@ def main():
         print(f"{'='*60}")
         
         try:
-            # Load data
-            train_seqs, train_labels, test_seqs, test_labels, n_classes = load_genomics_benchmark(task_name)
-            seq_len = len(train_seqs[0])
+            # Get dataset class
+            DatasetClass = get_dataset_class(task_name)
             
-            print(f"Train: {len(train_seqs)}, Test: {len(test_seqs)}")
+            # Load data
+            base_train = DatasetClass(split='train', version=0)
+            base_test = DatasetClass(split='test', version=0)
+            
+            # Get sequence length and num classes from first sample
+            sample_seq, _ = base_train[0]
+            seq_len = len(sample_seq)
+            
+            # Count classes
+            labels = [base_train[i][1] for i in range(min(1000, len(base_train)))]
+            n_classes = len(set(labels))
+            
+            print(f"Train: {len(base_train)}, Test: {len(base_test)}")
             print(f"Sequence length: {seq_len}, Classes: {n_classes}")
             
-            # Create datasets
-            train_dataset = GenomicsDataset(train_seqs, train_labels, max_len=seq_len)
-            test_dataset = GenomicsDataset(test_seqs, test_labels, max_len=seq_len)
+            # Wrap with one-hot encoding
+            train_dataset = GenomicsDataset(base_train, max_len=seq_len)
+            test_dataset = GenomicsDataset(base_test, max_len=seq_len)
             
             train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
             test_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True)
@@ -215,13 +225,15 @@ def main():
                 "task": task_name,
                 "accuracy": best_acc,
                 "mcc": best_mcc,
-                "n_train": len(train_seqs),
-                "n_test": len(test_seqs),
+                "n_train": len(base_train),
+                "n_test": len(base_test),
                 "seq_len": seq_len,
                 "n_classes": n_classes,
             })
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Error: {e}")
             results.append({"task": task_name, "error": str(e)})
     
